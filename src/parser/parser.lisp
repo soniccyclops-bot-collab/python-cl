@@ -110,14 +110,28 @@
 
 (defun parse-statement (state)
   "Parse a Python statement"
-  (cond
-    ;; Simple expression statement
-    ((or (eq (token-type (peek-token state)) :number)
-         (eq (token-type (peek-token state)) :identifier))
-     (let ((expr (parse-expression state)))
-       (make-instance 'py-expr-stmt :value expr)))
-    
-    (t (error "Unknown statement type: ~A" (peek-token state)))))
+  (let ((first-token (peek-token state)))
+    (cond
+      ;; Check for assignment: identifier = expression
+      ((and (eq (token-type first-token) :identifier)
+            (< (1+ (parse-state-position state)) (length (parse-state-tokens state)))
+            (let ((next-token (nth (1+ (parse-state-position state)) (parse-state-tokens state))))
+              (and next-token 
+                   (eq (token-type next-token) :operator)
+                   (string= (token-value next-token) "="))))
+       (parse-assignment state))
+      
+      ;; Otherwise, parse as expression statement
+      (t 
+       (let ((expr (parse-expression state)))
+         (make-py-expr-stmt expr))))))
+
+(defun parse-assignment (state)
+  "Parse assignment statement: target = value"
+  (let ((target (consume-token state :identifier)))
+    (consume-token state :operator "=")
+    (let ((value (parse-expression state)))
+      (make-py-assign (list (make-py-name (token-value target))) value))))
 
 ;;; Top-level Parser Interface
 
@@ -134,8 +148,14 @@
     (when (eq (token-type (peek-token state)) :eof)
       (return-from parse-tokens nil))
     
-    ;; Parse single expression for now
-    (parse-expression state)))
+    ;; Try to parse as statement first, then as expression
+    (handler-case
+        (parse-statement state)
+      (error ()
+        ;; Fallback to expression parsing for backward compatibility
+        (setf (parse-state-position state) 0
+              (parse-state-current-token state) (first tokens))
+        (parse-expression state)))))
 
 (defun parse-python (source)
   "Parse Python source code into AST"

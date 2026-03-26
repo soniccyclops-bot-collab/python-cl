@@ -168,6 +168,12 @@
                  :value value
                  :source-location source-location))
 
+(defun make-py-expr-stmt (value &key source-location)
+  "Create an expression statement AST node"
+  (make-instance 'py-expr-stmt 
+                 :value value
+                 :source-location source-location))
+
 ;;; AST Printing for Debugging
 
 (defmethod print-object ((node py-num) stream)
