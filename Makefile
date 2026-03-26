@@ -63,6 +63,11 @@ test-section:
 	     --eval "(python-cl:test-section \"$(SECTION)\")" \
 	     --eval "(quit)"
 
+# Run external test suite validation
+test-external:
+	@echo "Running external test suite validation..."
+	python3 external_test_runner.py
+
 # Interactive REPL
 repl:
 	@echo "Starting Python-CL interactive REPL..."
