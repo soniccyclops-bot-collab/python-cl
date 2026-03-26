@@ -50,7 +50,7 @@
                      (eq (token-type (peek-token state)) :operator)
                      (>= (operator-precedence (token-value (peek-token state))) min-precedence))
           do (let* ((op-token (consume-token state :operator))
-                    (op (intern (string-upcase (token-value op-token))))
+                    (op (intern (string-upcase (token-value op-token)) :python-cl))
                     (precedence (operator-precedence (token-value op-token)))
                     (right (parse-binary-op state (1+ precedence))))
                (setf left (make-py-binop left op right))))
@@ -63,7 +63,7 @@
              (member (token-value token) '("+" "-" "~" "not") :test #'string=))
         ;; Unary operator
         (let* ((op-token (consume-token state :operator))
-               (op (intern (string-upcase (token-value op-token))))
+               (op (intern (string-upcase (token-value op-token)) :python-cl))
                (operand (parse-unary state)))  ; Right-associative
           (make-py-unaryop op operand))
         ;; Not a unary operator, parse primary
