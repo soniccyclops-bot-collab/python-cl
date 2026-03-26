@@ -31,6 +31,13 @@
           :initform #C(0 0)))
   (:default-initargs :type-name 'complex))
 
+(defclass py-bool (py-object)
+  ((value :initarg :value
+          :accessor py-value
+          :type boolean
+          :initform nil))
+  (:default-initargs :type-name 'bool))
+
 (defclass py-str (py-object)
   ((value :initarg :value
           :accessor py-value
@@ -77,6 +84,9 @@
 (defun make-py-complex (value)
   (make-instance 'py-complex :value value))
 
+(defun make-py-bool (value)
+  (make-instance 'py-bool :value (if value t nil)))
+
 ;;; Type Predicates
 
 (defun py-object-p (obj)
@@ -95,6 +105,10 @@
   "Check if object is a Python complex"
   (typep obj 'py-complex))
 
+(defun py-bool-p (obj)
+  "Check if object is a Python bool"
+  (typep obj 'py-bool))
+
 (defun py-str-p (obj)
   "Check if object is a Python str"
   (typep obj 'py-str))
@@ -106,6 +120,18 @@
 (defun py-dict-p (obj)
   "Check if object is a Python dict"
   (typep obj 'py-dict))
+
+(defun py-type-name (obj)
+  "Get Python type name as string"
+  (cond
+    ((py-int-p obj) "int")
+    ((py-float-p obj) "float")
+    ((py-complex-p obj) "complex")
+    ((py-bool-p obj) "bool")
+    ((py-str-p obj) "str")
+    ((py-list-p obj) "list")
+    ((py-dict-p obj) "dict")
+    (t "object")))
 
 (defun make-py-str (value)
   (make-instance 'py-str :value (string value)))
@@ -136,6 +162,8 @@
     (float (make-py-float lisp-value))
     (complex (make-py-complex lisp-value))
     (string (make-py-str lisp-value))
+    ((eql t) (make-py-bool t))
+    ((eql nil) (make-py-bool nil))
     (list (apply #'make-py-list lisp-value))
     (py-object lisp-value)  ; Already a Python object
     (t (error "Cannot convert Lisp value to Python: ~A" lisp-value))))
@@ -146,6 +174,7 @@
     (py-int (py-value py-object))
     (py-float (py-value py-object))
     (py-complex (py-value py-object))
+    (py-bool (py-value py-object))
     (py-str (py-value py-object))
     (py-list (mapcar #'python-to-lisp (py-elements py-object)))
     (py-dict 
@@ -163,6 +192,7 @@
     (py-int (not (zerop (py-value obj))))
     (py-float (not (zerop (py-value obj))))
     (py-complex (not (zerop (py-value obj))))
+    (py-bool (py-value obj))
     (py-str (not (string= (py-value obj) "")))
     (py-list (not (null (py-elements obj))))
     (py-dict (not (zerop (hash-table-count (py-table obj)))))
@@ -184,6 +214,9 @@
       ((zerop real) (format stream "~Aj" imag))
       ((plusp imag) (format stream "(~A+~Aj)" real imag))
       (t (format stream "(~A~Aj)" real imag)))))
+
+(defmethod print-object ((obj py-bool) stream)
+  (format stream "~A" (if (py-value obj) "True" "False")))
 
 (defmethod print-object ((obj py-str) stream)
   (format stream "'~A'" (py-value obj)))

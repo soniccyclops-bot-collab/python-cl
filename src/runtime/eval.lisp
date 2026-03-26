@@ -14,24 +14,53 @@
 (defmethod py-eval-ast ((node py-str) env)
   (make-py-str (py-value node)))
 
+(defmethod py-eval-ast ((node py-bool) env)
+  (make-py-bool (py-value node)))
+
 ;; Names (variable lookup)
 (defmethod py-eval-ast ((node py-name) env)
   (py-lookup (py-id node) env))
 
 ;; Binary operations
 (defmethod py-eval-ast ((node py-binop) env)
-  (let ((left (py-eval-ast (py-left node) env))
-        (right (py-eval-ast (py-right node) env))
-        (op (py-op node)))
+  (let ((op (py-op node)))
     (case op
-      (+ (py-add left right))
-      (- (py-sub left right))
-      (* (py-mul left right))
-      (/ (py-div left right))
-      (/\/ (py-floordiv left right))
-      (% (py-mod left right))
-      (** (py-power left right))
-      (t (error "Unsupported binary operator: ~A" op)))))
+      ;; Short-circuiting boolean operations
+      (AND
+       (let ((left (py-eval-ast (py-left node) env)))
+         (if (py-truthy-p left)
+             (py-eval-ast (py-right node) env)  ; Return right value
+             left)))  ; Return left (falsy) value
+      
+      (OR  
+       (let ((left (py-eval-ast (py-left node) env)))
+         (if (py-truthy-p left)
+             left  ; Return left (truthy) value
+             (py-eval-ast (py-right node) env))))  ; Return right value
+      
+      ;; Regular binary operations (evaluate both sides)
+      (t
+       (let ((left (py-eval-ast (py-left node) env))
+             (right (py-eval-ast (py-right node) env)))
+         (case op
+           ;; Arithmetic operators
+           (+ (py-add left right))
+           (- (py-sub left right))
+           (* (py-mul left right))
+           (/ (py-div left right))
+           (/\/ (py-floordiv left right))
+           (% (py-mod left right))
+           (** (py-power left right))
+           
+           ;; Comparison operators
+           (< (py-lt left right))
+           (<= (py-le left right))
+           (> (py-gt left right))
+           (>= (py-ge left right))
+           (== (py-eq left right))
+           (!= (py-ne left right))
+           
+           (t (error "Unsupported binary operator: ~A" op))))))))
 
 ;; Unary operations
 (defmethod py-eval-ast ((node py-unaryop) env)

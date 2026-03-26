@@ -141,6 +141,10 @@
   "Create a string literal AST node"
   (make-instance 'py-str :value value :source-location source-location))
 
+(defun make-py-bool (value &key source-location)
+  "Create a boolean literal AST node"
+  (make-instance 'py-bool :value value :source-location source-location))
+
 (defun make-py-name (id &key source-location)
   "Create a name/identifier AST node"
   (make-instance 'py-name :id (if (symbolp id) id (intern (string-upcase id)))

@@ -47,9 +47,14 @@
   "Parse binary operations with precedence climbing"
   (let ((left (parse-unary state)))
     (loop while (and (peek-token state)
-                     (eq (token-type (peek-token state)) :operator)
-                     (>= (operator-precedence (token-value (peek-token state))) min-precedence))
-          do (let* ((op-token (consume-token state :operator))
+                     (or (and (eq (token-type (peek-token state)) :operator)
+                              (>= (operator-precedence (token-value (peek-token state))) min-precedence))
+                         (and (eq (token-type (peek-token state)) :keyword)
+                              (member (token-value (peek-token state)) '("and" "or") :test #'string=)
+                              (>= (operator-precedence (token-value (peek-token state))) min-precedence))))
+          do (let* ((op-token (if (eq (token-type (peek-token state)) :operator)
+                                  (consume-token state :operator)
+                                  (consume-token state :keyword)))
                     (op (intern (string-upcase (token-value op-token)) :python-cl))
                     (precedence (operator-precedence (token-value op-token)))
                     (right (parse-binary-op state (1+ precedence))))
@@ -83,6 +88,12 @@
        (advance-token state)
        (make-py-str (token-value token)))
       
+      ;; Boolean literals
+      ((and (eq (token-type token) :keyword)
+            (member (token-value token) '("True" "False") :test #'string=))
+       (advance-token state)
+       (make-py-bool (string= (token-value token) "True")))
+      
       ;; Identifiers
       ((eq (token-type token) :identifier)
        (advance-token state)
@@ -104,6 +115,9 @@
     ((:+ :-) 13) ; Unary plus/minus
     ((:* :/ :/\/ :%) 12) ; Multiplication, division, modulo
     ((:+ :-) 11) ; Addition, subtraction
+    ((:< :<= :> :>= :!= :==) 8) ; Comparisons
+    (:AND 5)     ; Boolean AND
+    (:OR 4)      ; Boolean OR
     (t 0)))      ; Unknown operators
 
 ;;; Statement Parsing

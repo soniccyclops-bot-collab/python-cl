@@ -291,34 +291,82 @@
 
 ;;; Comparison Operations
 
+(defun py-lt (left right)
+  "Python less than (<) operation"
+  (lisp-to-python (< (py-compare-values left right) 0)))
+
+(defun py-le (left right)
+  "Python less than or equal (<=) operation"
+  (lisp-to-python (<= (py-compare-values left right) 0)))
+
+(defun py-gt (left right)
+  "Python greater than (>) operation"
+  (lisp-to-python (> (py-compare-values left right) 0)))
+
+(defun py-ge (left right)
+  "Python greater than or equal (>=) operation"
+  (lisp-to-python (>= (py-compare-values left right) 0)))
+
 (defun py-eq (left right)
-  "Python equality (==) comparison"
-  (cond
-    ((and (py-object-p left) (py-object-p right))
-     (and (eq (class-of left) (class-of right))
-          (equal (py-value left) (py-value right))))
-    ((equal left right) t)
-    (t nil)))
+  "Python equality (==) operation"
+  (lisp-to-python (= (py-compare-values left right) 0)))
 
 (defun py-ne (left right)
-  "Python inequality (!=) comparison"
-  (not (py-eq left right)))
+  "Python inequality (!=) operation"
+  (lisp-to-python (/= (py-compare-values left right) 0)))
 
-(defun py-lt (left right)
-  "Python less-than (<) comparison"
+(defun py-compare-values (left right)
+  "Compare two Python values, return -1, 0, or 1"
   (cond
+    ;; Both numbers - compare numerically
     ((and (or (py-int-p left) (py-float-p left))
           (or (py-int-p right) (py-float-p right)))
-     (< (py-value left) (py-value right)))
+     (let ((left-val (py-value left))
+           (right-val (py-value right)))
+       (cond
+         ((< left-val right-val) -1)
+         ((> left-val right-val) 1)
+         (t 0))))
     
+    ;; Both strings - compare lexicographically  
     ((and (py-str-p left) (py-str-p right))
-     (string< (py-value left) (py-value right)))
+     (let ((left-val (py-value left))
+           (right-val (py-value right)))
+       (cond
+         ((string< left-val right-val) -1)
+         ((string> left-val right-val) 1)
+         (t 0))))
     
-    (t (error "TypeError: unsupported operand type(s) for <: '~A' and '~A'"
-              (py-type left) (py-type right)))))
+    ;; Different types - not comparable in general
+    (t (error "TypeError: '<' not supported between instances of '~A' and '~A'"
+              (py-type-name left) (py-type-name right)))))
 
-;;; Helper functions
+;;; Boolean Operations
 
-(defun py-object-p (obj)
-  "Check if object is a Python object"
-  (typep obj 'py-object))
+(defun py-and (left right)
+  "Python logical AND operation (short-circuiting)"
+  (if (py-truthy-p left)
+      right  ; Return right value if left is truthy
+      left)) ; Return left value if left is falsy
+
+(defun py-or (left right)
+  "Python logical OR operation (short-circuiting)" 
+  (if (py-truthy-p left)
+      left   ; Return left value if left is truthy
+      right)) ; Return right value if left is falsy
+
+;;; Comparison Operations
+
+;;; Boolean Operations
+
+(defun py-and (left right)
+  "Python logical AND operation (short-circuiting)"
+  (if (py-truthy-p left)
+      right  ; Return right value if left is truthy
+      left)) ; Return left value if left is falsy
+
+(defun py-or (left right)
+  "Python logical OR operation (short-circuiting)" 
+  (if (py-truthy-p left)
+      left   ; Return left value if left is truthy
+      right)) ; Return right value if left is falsy
