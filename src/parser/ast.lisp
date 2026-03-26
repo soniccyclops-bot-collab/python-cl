@@ -126,6 +126,14 @@
           :type (or py-expr null)
           :documentation "Return value expression (nil for bare return)")))
 
+(defclass py-break (py-stmt)
+  ()
+  (:documentation "Break statement for loop exit"))
+
+(defclass py-continue (py-stmt)
+  ()
+  (:documentation "Continue statement for loop restart"))
+
 (defclass py-if (py-stmt)
   ((test :initarg :test
          :accessor py-test
@@ -219,6 +227,16 @@
   "Create a return statement AST node"
   (make-instance 'py-return
                  :value value
+                 :source-location source-location))
+
+(defun make-py-break (&key source-location)
+  "Create a break statement AST node"
+  (make-instance 'py-break
+                 :source-location source-location))
+
+(defun make-py-continue (&key source-location)
+  "Create a continue statement AST node"
+  (make-instance 'py-continue
                  :source-location source-location))
 
 (defun make-py-call (func args &key source-location)

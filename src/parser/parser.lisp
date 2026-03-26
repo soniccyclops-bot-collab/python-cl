@@ -169,6 +169,18 @@
             (string= (token-value first-token) "return"))
        (parse-return-statement state))
       
+      ;; Break statement
+      ((and (eq (token-type first-token) :keyword)
+            (string= (token-value first-token) "break"))
+       (consume-token state :keyword "break")
+       (make-py-break))
+       
+      ;; Continue statement
+      ((and (eq (token-type first-token) :keyword)
+            (string= (token-value first-token) "continue"))
+       (consume-token state :keyword "continue")
+       (make-py-continue))
+      
       ;; Check for assignment: identifier = expression
       ((and (eq (token-type first-token) :identifier)
             (< (1+ (parse-state-position state)) (length (parse-state-tokens state)))
@@ -184,14 +196,35 @@
          (make-py-expr-stmt expr))))))
 
 (defun parse-if-statement (state)
-  "Parse if statement: if condition: body"
+  "Parse if statement with elif/else: if condition: body [elif condition: body]* [else: body]"
   (consume-token state :keyword "if")
   (let ((test (parse-expression state)))
     (consume-token state :delimiter ":")
-    ;; For now, parse single statement as body  
-    ;; TODO: Handle multi-statement bodies with proper indentation
-    (let ((body (list (parse-statement state))))
-      (make-py-if test body nil))))  ; No else clause for now
+    (let ((body (list (parse-statement state)))
+          (orelse nil))
+      
+      ;; Parse elif/else chain
+      (loop while (and (not (eq (token-type (peek-token state)) :eof))
+                       (not (eq (token-type (peek-token state)) :newline))
+                       (eq (token-type (peek-token state)) :keyword)
+                       (member (token-value (peek-token state)) '("elif" "else") :test #'string=))
+            do (cond
+                 ;; elif: create nested if statement
+                 ((string= (token-value (peek-token state)) "elif")
+                  (consume-token state :keyword "elif")
+                  (let ((elif-test (parse-expression state)))
+                    (consume-token state :delimiter ":")
+                    (let ((elif-body (list (parse-statement state))))
+                      (setf orelse (list (make-py-if elif-test elif-body nil))))))
+                 
+                 ;; else: final body
+                 ((string= (token-value (peek-token state)) "else")
+                  (consume-token state :keyword "else")
+                  (consume-token state :delimiter ":")
+                  (setf orelse (list (parse-statement state)))
+                  (return)))) ; else ends the chain
+      
+      (make-py-if test body orelse))))
 
 (defun parse-while-statement (state)
   "Parse while statement: while condition: body"
