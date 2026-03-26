@@ -103,8 +103,55 @@
                (setf last-result (py-eval-ast stmt env))))
     (or last-result (make-py-none))))  ; Return None if loop never executed
 
+(defmethod py-eval-ast ((node py-function-def) env)
+  (let ((func-obj (make-py-function (py-name node) (py-args node) (py-body node))))
+    (py-bind (py-name node) func-obj env)
+    func-obj))
+
+(defmethod py-eval-ast ((node py-return) env)
+  (if (py-value node)
+      (throw 'return (py-eval-ast (py-value node) env))
+      (throw 'return (make-py-none))))
+
+(defmethod py-eval-ast ((node py-call) env)
+  (let ((func (py-eval-ast (py-func node) env))
+        (args (mapcar (lambda (arg) (py-eval-ast arg env)) (py-args node))))
+    (py-call-function func args env)))
+
 (defmethod py-eval-ast ((node py-expr-stmt) env)
   (py-eval-ast (py-value node) env))
+
+;;; Function Calls
+
+(defun py-call-function (func args env)
+  "Call a Python function with arguments"
+  (etypecase func
+    (py-function (py-call-user-function func args env))
+    (t (error "TypeError: '~A' object is not callable" (py-type-name func)))))
+
+(defun py-call-user-function (func args env)
+  "Call a user-defined Python function"
+  (let ((func-args (py-args func))
+        (func-body (py-body func)))
+    ;; Check argument count
+    (unless (= (length args) (length func-args))
+      (error "TypeError: ~A() takes ~A arguments but ~A were given"
+             (py-name func) (length func-args) (length args)))
+    
+    ;; Create new environment for function scope
+    (let ((func-env (make-py-env :parent env)))
+      ;; Bind arguments to parameters
+      (loop for arg in args
+            for param in func-args
+            do (py-bind param arg func-env))
+      
+      ;; Execute function body with return handling
+      (catch 'return
+        (let (last-result)
+          (dolist (stmt func-body)
+            (setf last-result (py-eval-ast stmt func-env)))
+          ;; Return None if no explicit return
+          (or last-result (make-py-none)))))))
 
 (defmethod py-eval-ast ((node py-return) env)
   ;; TODO: Implement proper return handling with conditions

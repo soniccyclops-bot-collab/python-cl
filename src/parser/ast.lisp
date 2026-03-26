@@ -78,6 +78,16 @@
            :type list
            :documentation "List of value expressions")))
 
+(defclass py-call (py-expr)
+  ((func :initarg :func
+         :accessor py-func
+         :type py-expr
+         :documentation "Function to call")
+   (args :initarg :args
+         :accessor py-args
+         :type list
+         :documentation "Call arguments")))
+
 ;;; Statement Nodes
 
 (defclass py-assign (py-stmt)
@@ -195,6 +205,27 @@
   (make-instance 'py-while
                  :test test
                  :body body
+                 :source-location source-location))
+
+(defun make-py-function-def (name args body &key source-location)
+  "Create a function definition AST node"
+  (make-instance 'py-function-def
+                 :name name
+                 :args args
+                 :body body
+                 :source-location source-location))
+
+(defun make-py-return (value &key source-location)
+  "Create a return statement AST node"
+  (make-instance 'py-return
+                 :value value
+                 :source-location source-location))
+
+(defun make-py-call (func args &key source-location)
+  "Create a function call AST node"
+  (make-instance 'py-call
+                 :func func
+                 :args args
                  :source-location source-location))
 
 (defun make-py-expr-stmt (value &key source-location)

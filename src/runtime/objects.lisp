@@ -94,6 +94,12 @@
 (defun make-py-none ()
   (make-instance 'py-none))
 
+(defun make-py-function (name args body)
+  (make-instance 'py-function 
+                 :name name
+                 :args args
+                 :body body))
+
 ;;; Type Predicates
 
 (defun py-object-p (obj)
