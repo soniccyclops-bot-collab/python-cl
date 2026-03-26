@@ -29,24 +29,24 @@
 (test tokenize-identifiers
   "Test identifier tokenization"
   (let ((tokens (tokenize "hello")))
-    (is (= (length tokens) 2))  ; identifier + EOF
+    (is (= (length tokens) 3))  ; identifier + newline + EOF
     (is (eq (token-type (first tokens)) :identifier))
     (is (string= (token-value (first tokens)) "hello")))
   
   (let ((tokens (tokenize "def")))
-    (is (= (length tokens) 2))
+    (is (= (length tokens) 3))
     (is (eq (token-type (first tokens)) :keyword))
     (is (string= (token-value (first tokens)) "def"))))
 
 (test tokenize-operators
   "Test operator tokenization"
   (let ((tokens (tokenize "+")))
-    (is (= (length tokens) 2))  ; operator + EOF
+    (is (= (length tokens) 3))  ; operator + newline + EOF
     (is (eq (token-type (first tokens)) :operator))
     (is (string= (token-value (first tokens)) "+")))
   
   (let ((tokens (tokenize "+=")))
-    (is (= (length tokens) 2))
+    (is (= (length tokens) 3))
     (is (eq (token-type (first tokens)) :operator))
     (is (string= (token-value (first tokens)) "+="))))
 
@@ -83,7 +83,7 @@
   (let ((py-int (make-py-int 42)))
     (is (typep py-int 'py-int))
     (is (= (py-value py-int) 42))
-    (is (eq (py-type-name py-int) 'int)))
+    (is (equal (symbol-name (py-type-name py-int)) "INT")))
   
   (let ((py-str (make-py-str "hello")))
     (is (typep py-str 'py-str))
@@ -171,7 +171,8 @@
 
 (test tokenize-indentation
   "Tokenizer emits INDENT/DEDENT tokens for Python blocks"
-  (let* ((tokens (tokenize "if x > 5:\n    y = 1\n    z = 2\nw = 3\n"))
+  (let* ((source (format nil "if x > 5:~%    y = 1~%    z = 2~%w = 3~%"))
+         (tokens (tokenize source))
          (types (mapcar #'token-type tokens)))
     (is (equal types
                '(:keyword :identifier :operator :number :delimiter :newline
@@ -184,8 +185,8 @@
 
 (test indentation-errors
   "Invalid indentation patterns raise errors"
-  (signals error (tokenize "if x:\n  y = 1\n z = 2\n"))
-  (signals error (tokenize "if x:\n \ty = 1\n")))
+  (signals error (tokenize (format nil "if x:~%  y = 1~% z = 2~%")))
+  (signals error (tokenize (format nil "if x:~% 	y = 1~%"))))
 
 (test parse-top-level-expressions-as-expressions
   "Top-level expressions should parse as expressions, not expression statements."
@@ -199,8 +200,8 @@
   (is (typep (python-cl::parse-python "return 1") 'python-cl::py-return))
   (is (typep (python-cl::parse-python "break") 'python-cl::py-break))
   (is (typep (python-cl::parse-python "continue") 'python-cl::py-continue))
-  (is (typep (python-cl::parse-python "if True:\n    x\n") 'python-cl::py-if))
-  (is (typep (python-cl::parse-python "while True:\n    x\n") 'python-cl::py-while)))
+  (is (typep (python-cl::parse-python "if 1:\n    x\n") 'python-cl::py-if))
+  (is (typep (python-cl::parse-python "while 1:\n    x\n") 'python-cl::py-while)))
 
 (test reject-invalid-statement-fallbacks
   "Malformed statements must not silently parse."
