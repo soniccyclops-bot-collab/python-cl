@@ -26,47 +26,40 @@
   (let ((op (py-op node)))
     (case op
       ;; Short-circuiting boolean operations
-      (AND
+      (:AND
        (let ((left (py-eval-ast (py-left node) env)))
          (if (py-truthy-p left)
-             (py-eval-ast (py-right node) env)  ; Return right value
-             left)))  ; Return left (falsy) value
-      
-      (OR  
+             (py-eval-ast (py-right node) env)
+             left)))
+
+      (:OR
        (let ((left (py-eval-ast (py-left node) env)))
          (if (py-truthy-p left)
-             left  ; Return left (truthy) value
-             (py-eval-ast (py-right node) env))))  ; Return right value
-      
-      ;; Regular binary operations (evaluate both sides)
+             left
+             (py-eval-ast (py-right node) env))))
+
       (t
        (let ((left (py-eval-ast (py-left node) env))
              (right (py-eval-ast (py-right node) env)))
          (case op
-           ;; Arithmetic operators
-           (+ (py-add left right))
-           (- (py-sub left right))
-           (* (py-mul left right))
-           (/ (py-div left right))
-           (/\/ (py-floordiv left right))
-           (% (py-mod left right))
-           (** (py-power left right))
-           
-           ;; Comparison operators
-           (< (py-lt left right))
-           (<= (py-le left right))
-           (> (py-gt left right))
-           (>= (py-ge left right))
-           (== (py-eq left right))
-           (!= (py-ne left right))
-           
-           ;; Bitwise operators
-           (& (py-bitwise-and left right))
-           (\| (py-bitwise-or left right))
-           (^ (py-bitwise-xor left right))
-           (<< (py-left-shift left right))
-           (>> (py-right-shift left right))
-           
+           (:+ (py-add left right))
+           (:- (py-sub left right))
+           (:* (py-mul left right))
+           (:/ (py-div left right))
+           (:// (py-floordiv left right))
+           (:% (py-mod left right))
+           (:** (py-power left right))
+           (:< (py-lt left right))
+           (:<= (py-le left right))
+           (:> (py-gt left right))
+           (:>= (py-ge left right))
+           (:== (py-eq left right))
+           (:!= (py-ne left right))
+           (:& (py-bitwise-and left right))
+           (:\| (py-bitwise-or left right))
+           (:^ (py-bitwise-xor left right))
+           (:<< (py-left-shift left right))
+           (:>> (py-right-shift left right))
            (t (error "Unsupported binary operator: ~A" op))))))))
 
 ;; Unary operations
@@ -74,11 +67,17 @@
   (let ((operand (py-eval-ast (py-operand node) env))
         (op (py-op node)))
     (case op
-      (+ operand)  ; Unary plus (no-op for numbers)
-      (- (py-neg operand))  ; Unary minus
-      (~ (py-invert operand))  ; Bitwise NOT
-      (NOT (py-not operand))   ; Logical NOT
+      (:+ operand)
+      (:- (py-neg operand))
+      (:~ (py-invert operand))
+      (:NOT (py-not operand))
       (t (error "Unsupported unary operator: ~A" op)))))
+
+(defmethod py-eval-ast ((node py-conditional-expression) env)
+  (let ((test-result (py-eval-ast (py-test node) env)))
+    (if (py-truthy-p test-result)
+        (py-eval-ast (py-consequent node) env)
+        (py-eval-ast (py-alternative node) env))))
 
 ;; Statements
 (defmethod py-eval-ast ((node py-assign) env)
@@ -100,7 +99,7 @@
                       (:/ (py-div current-value new-value))
                       (:/\/ (py-floordiv current-value new-value))
                       (:% (py-mod current-value new-value))
-                      (:** (py-pow current-value new-value))
+                      (:** (py-power current-value new-value))
                       (t (error "Unknown augmented assignment operator: ~A" (py-op node))))))
         ;; Bind the result
         (py-bind target-name result env)
@@ -132,7 +131,7 @@
     (or last-result (make-py-none))))  ; Return None if loop never executed
 
 (defmethod py-eval-ast ((node py-function-def) env)
-  (let ((func-obj (make-py-function (py-name node) (py-args node) (py-body node))))
+  (let ((func-obj (make-py-function (py-name node) (py-args node) (py-body node) env)))
     (py-bind (py-name node) func-obj env)
     func-obj))
 
@@ -159,21 +158,23 @@
 
 (defun py-call-function (func args env)
   "Call a Python function with arguments"
-  (etypecase func
-    (py-function (py-call-user-function func args env))
+  (cond
+    ((typep func 'py-function) (py-call-user-function func args env))
+    ((functionp func) (apply func args))
     (t (error "TypeError: '~A' object is not callable" (py-type-name func)))))
 
 (defun py-call-user-function (func args env)
   "Call a user-defined Python function"
   (let ((func-args (py-args func))
-        (func-body (py-body func)))
+        (func-body (py-body func))
+        (closure (or (ignore-errors (py-closure func)) env)))
     ;; Check argument count
     (unless (= (length args) (length func-args))
       (error "TypeError: ~A() takes ~A arguments but ~A were given"
              (py-name func) (length func-args) (length args)))
     
     ;; Create new environment for function scope
-    (let ((func-env (make-py-env :enclosing env)))
+    (let ((func-env (make-py-env :enclosing closure :global (py-global closure))))
       ;; Bind arguments to parameters
       (loop for arg in args
             for param in func-args
@@ -186,12 +187,6 @@
             (setf last-result (py-eval-ast stmt func-env)))
           ;; Return None if no explicit return
           (or last-result (make-py-none)))))))
-
-(defmethod py-eval-ast ((node py-return) env)
-  ;; TODO: Implement proper return handling with conditions
-  (if (py-value node)
-      (py-eval-ast (py-value node) env)
-      nil))
 
 ;;; Statement Execution
 

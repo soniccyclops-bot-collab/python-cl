@@ -12,17 +12,17 @@
 (test tokenize-numbers
   "Test numeric literal tokenization"
   (let ((tokens (tokenize "42")))
-    (is (= (length tokens) 2))  ; number + EOF
+    (is (= (length tokens) 3))  ; number + newline + EOF
     (is (eq (token-type (first tokens)) :number))
     (is (string= (token-value (first tokens)) "42")))
   
   (let ((tokens (tokenize "3.14")))
-    (is (= (length tokens) 2))
+    (is (= (length tokens) 3))
     (is (eq (token-type (first tokens)) :number))
     (is (string= (token-value (first tokens)) "3.14")))
   
   (let ((tokens (tokenize "0xFF")))
-    (is (= (length tokens) 2))
+    (is (= (length tokens) 3))
     (is (eq (token-type (first tokens)) :number))
     (is (string= (token-value (first tokens)) "0xFF"))))
 
@@ -53,7 +53,7 @@
 (test tokenize-expressions
   "Test tokenizing simple expressions"
   (let ((tokens (tokenize "2 + 3")))
-    (is (= (length tokens) 4))  ; number, operator, number, EOF
+    (is (= (length tokens) 5))  ; number, operator, number, newline, EOF
     (is (eq (token-type (first tokens)) :number))
     (is (eq (token-type (second tokens)) :operator))
     (is (eq (token-type (third tokens)) :number))))
@@ -88,7 +88,7 @@
   (let ((py-str (make-py-str "hello")))
     (is (typep py-str 'py-str))
     (is (string= (py-value py-str) "hello"))
-    (is (eq (py-type-name py-str) 'str)))
+    (is (equal (symbol-name (py-type-name py-str)) "STR")))
   
   (let ((py-list (make-py-list 1 2 3)))
     (is (typep py-list 'py-list))
@@ -166,8 +166,73 @@
   (is (= (py-len (make-py-list 1 2 3)) 3))
   
   ;; type function
-  (is (eq (py-type (make-py-int 42)) 'int))
-  (is (eq (py-type (make-py-str "hello")) 'str)))
+  (is (equal (symbol-name (py-type (make-py-int 42))) "INT"))
+  (is (equal (symbol-name (py-type (make-py-str "hello"))) "STR")))
+
+(test tokenize-indentation
+  "Tokenizer emits INDENT/DEDENT tokens for Python blocks"
+  (let* ((tokens (tokenize "if x > 5:\n    y = 1\n    z = 2\nw = 3\n"))
+         (types (mapcar #'token-type tokens)))
+    (is (equal types
+               '(:keyword :identifier :operator :number :delimiter :newline
+                 :indent
+                 :identifier :operator :number :newline
+                 :identifier :operator :number :newline
+                 :dedent
+                 :identifier :operator :number :newline
+                 :eof)))))
+
+(test indentation-errors
+  "Invalid indentation patterns raise errors"
+  (signals error (tokenize "if x:\n  y = 1\n z = 2\n"))
+  (signals error (tokenize "if x:\n \ty = 1\n")))
+
+(test parse-top-level-expressions-as-expressions
+  "Top-level expressions should parse as expressions, not expression statements."
+  (let ((ast (python-cl::parse-python "x + 1")))
+    (is (typep ast 'python-cl::py-binop))
+    (is (eq (python-cl::py-op ast) :+))))
+
+(test parse-top-level-statements-as-statements
+  "Top-level statements should stay statements."
+  (is (typep (python-cl::parse-python "x = 1") 'python-cl::py-assign))
+  (is (typep (python-cl::parse-python "return 1") 'python-cl::py-return))
+  (is (typep (python-cl::parse-python "break") 'python-cl::py-break))
+  (is (typep (python-cl::parse-python "continue") 'python-cl::py-continue))
+  (is (typep (python-cl::parse-python "if True:\n    x\n") 'python-cl::py-if))
+  (is (typep (python-cl::parse-python "while True:\n    x\n") 'python-cl::py-while)))
+
+(test reject-invalid-statement-fallbacks
+  "Malformed statements must not silently parse."
+  (signals error (python-cl::parse-python "x + 1 = 2"))
+  (signals error (python-cl::parse-python "x ="))
+  (signals error (python-cl::parse-python "return = 1")))
+
+(test conditional-expressions
+  "Conditional expressions parse with low precedence and short-circuit correctly"
+  (setf python-cl::*python-environment* (make-py-env))
+  (is (= (py-eval "1 if True else 2") 1))
+  (is (= (py-eval "1 if False else 2") 2))
+  (is (= (py-eval "10 if 3 > 2 else 20") 10))
+  (is (= (py-eval "1 + 2 if 3 > 2 else 4 + 5") 3))
+  (is (= (py-eval "1 if 1 + 1 == 2 else 0") 1))
+  ;; Current string literal handling preserves quotes in the value.
+  (is (string= (py-eval "'A' if True else 'B' if True else 'C'") "'A'"))
+  (is (string= (py-eval "'A' if False else 'B' if True else 'C'") "'B'"))
+  (is (string= (py-eval "'A' if False else 'B' if False else 'C'") "'C'"))
+  (is (= (py-eval "123 if True else missing_name") 123))
+  (is (= (py-eval "missing_name if False else 456") 456)))
+
+(test block-parsing-and-execution
+  "Indented blocks execute for functions, if statements, and while loops"
+  (setf python-cl::*python-environment* (make-py-env))
+  (is (= (py-eval "x = 0\nif 2 > 1:\n    x = 7\nx\n") 7))
+  (setf python-cl::*python-environment* (make-py-env))
+  (is (= (py-eval "counter = 0\nwhile counter < 3:\n    counter += 1\ncounter\n") 3))
+  (setf python-cl::*python-environment* (make-py-env))
+  (is (= (py-eval "def add(a, b):\n    total = a + b\n    return total\nadd(2, 3)\n") 5))
+  (setf python-cl::*python-environment* (make-py-env))
+  (is (= (py-eval "value = 0\nif 1 < 2:\n    if 3 < 4:\n        value = 11\nvalue\n") 11)))
 
 ;;; Test Runner
 

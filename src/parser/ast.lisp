@@ -88,6 +88,20 @@
          :type list
          :documentation "Call arguments")))
 
+(defclass py-conditional-expression (py-expr)
+  ((consequent :initarg :consequent
+               :accessor py-consequent
+               :type py-expr
+               :documentation "Value returned when test is truthy")
+   (test :initarg :test
+         :accessor py-test
+         :type py-expr
+         :documentation "Condition expression")
+   (alternative :initarg :alternative
+                :accessor py-alternative
+                :type py-expr
+                :documentation "Value returned when test is falsy")))
+
 ;;; Statement Nodes
 
 (defclass py-assign (py-stmt)
@@ -268,6 +282,14 @@
                  :args args
                  :source-location source-location))
 
+(defun make-py-conditional-expression (consequent test alternative &key source-location)
+  "Create a conditional expression AST node"
+  (make-instance 'py-conditional-expression
+                 :consequent consequent
+                 :test test
+                 :alternative alternative
+                 :source-location source-location))
+
 (defun make-py-expr-stmt (value &key source-location)
   "Create an expression statement AST node"
   (make-instance 'py-expr-stmt 
@@ -292,3 +314,8 @@
   (print-unreadable-object (node stream :type t)
     (format stream "(~A ~A ~A)" 
             (py-left node) (py-op node) (py-right node))))
+
+(defmethod print-object ((node py-conditional-expression) stream)
+  (print-unreadable-object (node stream :type t)
+    (format stream "(~A if ~A else ~A)"
+            (py-consequent node) (py-test node) (py-alternative node))))

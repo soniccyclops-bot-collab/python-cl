@@ -7,22 +7,30 @@
 (defvar *python-environment* nil
   "Global Python environment for interactive use")
 
+(defun eval-python-ast (ast env)
+  "Evaluate either a single AST node or a list of statements."
+  (if (listp ast)
+      (let (result)
+        (dolist (stmt ast result)
+          (setf result (py-eval-ast stmt env))))
+      (py-eval-ast ast env)))
+
 (defun py-eval (source)
-  "Evaluate a Python expression and return the result"
+  "Evaluate Python source and return the final result."
   (unless *python-environment*
     (setf *python-environment* (make-py-env)))
-  
-  ;; Parse the source into AST and evaluate
   (let ((ast (parse-python source)))
     (if ast
-        (python-to-lisp (py-eval-ast ast *python-environment*))
+        (python-to-lisp (eval-python-ast ast *python-environment*))
         (error "Failed to parse: ~A" source))))
-
-
 
 (defun py-exec (source)
   "Execute Python statements (no return value)"
-  (py-eval source)
+  (unless *python-environment*
+    (setf *python-environment* (make-py-env)))
+  (let ((ast (parse-python source)))
+    (when ast
+      (eval-python-ast ast *python-environment*)))
   nil)
 
 (defun py-load (filename)

@@ -74,7 +74,8 @@
          :type list)
    (closure :initarg :closure
             :accessor py-closure
-            :type py-env))
+            :type (or py-env null)
+            :initform nil))
   (:default-initargs :type-name 'function))
 
 ;;; Object Construction
@@ -94,11 +95,12 @@
 (defun make-py-none ()
   (make-instance 'py-none))
 
-(defun make-py-function (name args body)
+(defun make-py-function (name args body &optional closure)
   (make-instance 'py-function 
-                 :name name
-                 :args args
-                 :body body))
+                 :name (if (symbolp name) name (intern (string-upcase name)))
+                 :args (mapcar (lambda (arg) (if (symbolp arg) arg (intern (string-upcase arg)))) args)
+                 :body body
+                 :closure closure))
 
 ;;; Type Predicates
 
@@ -139,17 +141,18 @@
   (typep obj 'py-dict))
 
 (defun py-type-name (obj)
-  "Get Python type name as string"
+  "Get Python type name as a symbol."
   (cond
-    ((py-int-p obj) "int")
-    ((py-float-p obj) "float")
-    ((py-complex-p obj) "complex")
-    ((py-bool-p obj) "bool")
-    ((py-none-p obj) "NoneType")
-    ((py-str-p obj) "str")
-    ((py-list-p obj) "list")
-    ((py-dict-p obj) "dict")
-    (t "object")))
+    ((py-int-p obj) 'int)
+    ((py-float-p obj) 'float)
+    ((py-complex-p obj) 'complex)
+    ((py-bool-p obj) 'bool)
+    ((py-none-p obj) 'NoneType)
+    ((py-str-p obj) 'str)
+    ((py-list-p obj) 'list)
+    ((py-dict-p obj) 'dict)
+    ((typep obj 'py-function) 'function)
+    (t 'object)))
 
 (defun make-py-str (value)
   (make-instance 'py-str :value (string value)))
